@@ -49,6 +49,7 @@ class Options(object):
     showLiveResults : bool = False
     logResults : bool = True
     saveModels : bool = False
+    debug : bool = False
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -67,6 +68,7 @@ class ReplayMemory:
 
 class DQN:
     def __init__(self, envInfo : EnvInfo, hyperparams : Hyperparams, nnModel, options : Options = None):
+        self.name = type(self).__name__
         self.env = envInfo.env
         self.observation_space = envInfo.observation_space
         self.action_space = envInfo.action_space
@@ -95,11 +97,13 @@ class DQN:
     def getAction(self, state, train = True):
         if train and random.random() < self.epsilon:
             return self.env.action_space.sample()
-        state = torch.tensor(state).float().detach()
-        state = state.to(device)
-        state = state.unsqueeze(0)
-        qValues = self.policyNetwork(state)
-        return torch.argmax(qValues).item()
+        else:
+            with torch.no_grad():                
+                state = torch.tensor(state).float().detach()
+                state = state.to(device)
+                state = state.unsqueeze(0)
+                qValues = self.policyNetwork(state)
+                return torch.argmax(qValues).item()
 
     def optimize(self):
         batchSize = self.batchSize
@@ -169,13 +173,17 @@ class DQN:
             plt.savefig(f'{resultsPath}/images/{filePrefix}_EpsilonDecay.png')
         plt.clf()
 
-    def saveWeights(self):
-        resultsPath = self.options.resultsPath
-        filePrefix = self.options.filePrefix
-        with open(f'{resultsPath}/weights/{filePrefix}_policy_weights.pkl', 'wb') as f:
-            pickle.dump(self.policyNetwork.state_dict(), f)
-        with open(f'{resultsPath}/weights/{filePrefix}_target_weights.pkl', 'wb') as f:
-            pickle.dump(self.targetNetwork.state_dict(), f)
+    # def saveWeights(self):
+    #     resultsPath = self.options.resultsPath
+    #     filePrefix = self.options.filePrefix
+    #     with open(f'{resultsPath}/weights/{filePrefix}_policy_weights.pkl', 'wb') as f:
+    #         pickle.dump(self.policyNetwork.state_dict(), f)
+    #     with open(f'{resultsPath}/weights/{filePrefix}_target_weights.pkl', 'wb') as f:
+    #         pickle.dump(self.targetNetwork.state_dict(), f)
+
+    def loadModels(self, policyModel, targetModel):
+        self.policyNetwork = policyModel
+        self.targetNetwork = targetModel
 
     def saveModels(self):
         resultsPath = self.options.resultsPath
@@ -193,7 +201,8 @@ class DQN:
             filePrefix = self.options.filePrefix
             title = 'Rewards vs Episodes'
             if filePrefix:
-                title += ' - ' + filePrefix
+                title += ' - ' + filePrefix 
+            title += ' - ' + self.name
             plt.suptitle(title)
             plt.title(f'Current Average Reward : {averageOfLast100[-1]}')
             plt.xlabel('Episode')
@@ -206,7 +215,7 @@ class DQN:
                 fig2 = plt.figure(1)
                 fig2.set_figwidth(12)
                 fig2.set_figheight(10)
-                plt.title('Epsilon Decay')
+                plt.title(f'Epsilon Decay - {filePrefix} {self.name}')
                 plt.xlabel('Time Steps')
                 plt.ylabel('Epsilon')
                 plt.plot(epsilons)
@@ -222,6 +231,10 @@ class DQN:
             plt.legend()
             display.clear_output(wait=True)
             display.display(plt.gcf())
+
+    def debug(self,log):
+        if self.options.debug:
+            print(log)
 
     def train(self):
         env = self.env
@@ -239,6 +252,7 @@ class DQN:
             state = np.reshape(state, [1, observation_space])
             totalRewardPerEpisode = 0
             steps = 0
+            epsilons.append(self.epsilon)
             while True:
                 action = self.getAction(state)
                 if isGymEnvLatest:
@@ -257,7 +271,7 @@ class DQN:
                     np.exp((-1 * self.iterations) / self.epsilonDecay)
                 self.iterations += 1
                 self.epsilon = max(self.epsilonMin, decayed_epsilon)
-                epsilons.append(self.epsilon)
+                # epsilons.append(self.epsilon)
 
                 steps += 1
                 if steps % self.updateFrequency:
@@ -304,27 +318,28 @@ class DQN:
         self.policyNetwork.load_state_dict(policyWeights)
         self.targetNetwork.load_state_dict(targetWeights)
     
-    def greedy(self, episodes, timeSteps):
+    def greedy(self, timeSteps, ylim = None):
         env = self.env
         observation_space = self.observation_space
         rewards = []
-        for i in range(episodes):
+        for i in range(timeSteps):
             if isGymEnvLatest:
                 state,info = env.reset()
             else:
                 state = env.reset()
             state = np.reshape(state, [1, observation_space])
             totalRewardPerEpisode = 0
-            for j in range(timeSteps):
+            while True:
                 action = self.getAction(state, train=False)
                 if isGymEnvLatest:
                     nextState, reward, terminated, truncated, _ = env.step(action)
                     done = terminated or truncated
                 else:
                     nextState, reward, done, _ = env.step(action)
-                print(f'Reward Per Time Step : {reward}')
                 totalRewardPerEpisode += reward
                 state = nextState
+                self.debug(f"Reward:{reward}, {terminated=},{truncated=}")
+
                 if done:
                     rewards.append(totalRewardPerEpisode)
                     print('-'*80)
@@ -332,8 +347,7 @@ class DQN:
                         f"\nEpisode {i} \
                         \nCurrent Reward {totalRewardPerEpisode} "
                     )
-                    print(done)
-                    # break
+                    break
         
         fig = plt.figure(1)
         fig.set_figwidth(12)
@@ -346,10 +360,12 @@ class DQN:
         resultsPath = self.options.resultsPath
         plt.xlabel('Episode')
         plt.ylabel('Rewards')
+        if ylim:
+            plt.ylim(ylim)
         plt.plot(rewards, '-r', label="Rewards")
         plt.legend()
         if resultsPath:
-            plt.savefig(f'{resultsPath}/images/{filePrefix}_Greedy_EpisodesVsRewards.png')
+            plt.savefig(f'{resultsPath}/images/{filePrefix}_{self.name}_Greedy_EpisodesVsRewards.png')
         plt.show()
         
 
@@ -367,6 +383,8 @@ class DuelingDQN(DQN):
 class DoubleDQN(DQN):
        def __init__(self, envInfo: EnvInfo, hyperparams: Hyperparams, nnModel, options: Options = {}):
            super().__init__(envInfo, hyperparams, nnModel, options)
+           self.name = type(self).__name__
+
            
        def syncWeights(self):
         policyWeights = self.policyNetwork.state_dict()
@@ -394,10 +412,12 @@ class DoubleDQN(DQN):
                 indices = np.arange(batchSize, dtype=np.int64)
 
                 qValues = self.policyNetwork(states)
-                qNewValues =  self.policyNetwork(nextStates)
 
                 qDotValues = None
+                qNewValues = None
                 with torch.no_grad():
+                    qNewValues =  self.policyNetwork(nextStates)
+
                     qDotValues = self.targetNetwork(nextStates)
                 
                 z = torch.argmax(qDotValues,dim=1)
