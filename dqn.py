@@ -304,18 +304,18 @@ class DQN:
         self.policyNetwork.load_state_dict(policyWeights)
         self.targetNetwork.load_state_dict(targetWeights)
     
-    def greedy(self, timeSteps):
+    def greedy(self, episodes, timeSteps):
         env = self.env
         observation_space = self.observation_space
         rewards = []
-        for i in range(timeSteps):
+        for i in range(episodes):
             if isGymEnvLatest:
                 state,info = env.reset()
             else:
                 state = env.reset()
             state = np.reshape(state, [1, observation_space])
             totalRewardPerEpisode = 0
-            while True:
+            for j in range(timeSteps):
                 action = self.getAction(state, train=False)
                 if isGymEnvLatest:
                     nextState, reward, terminated, truncated, _ = env.step(action)
@@ -324,7 +324,7 @@ class DQN:
                     nextState, reward, done, _ = env.step(action)
                 print(f'Reward Per Time Step : {reward}')
                 totalRewardPerEpisode += reward
-
+                state = nextState
                 if done:
                     rewards.append(totalRewardPerEpisode)
                     print('-'*80)
@@ -332,7 +332,8 @@ class DQN:
                         f"\nEpisode {i} \
                         \nCurrent Reward {totalRewardPerEpisode} "
                     )
-                    break
+                    print(done)
+                    # break
         
         fig = plt.figure(1)
         fig.set_figwidth(12)
@@ -353,8 +354,8 @@ class DQN:
         
 
 class DuelingDQN(DQN):
-    def __init__(self, env, hyperparams: Hyperparams, nnModel, options: Options = {}):
-        super().__init__(env, hyperparams, nnModel, options)
+    def __init__(self, envInfo: EnvInfo, hyperparams: Hyperparams, nnModel, options: Options = {}):
+        super().__init__(envInfo, hyperparams, nnModel, options)
     
     def syncWeights(self):
         policyWeights = self.policyNetwork.state_dict()
@@ -366,6 +367,13 @@ class DuelingDQN(DQN):
 class DoubleDQN(DQN):
        def __init__(self, envInfo: EnvInfo, hyperparams: Hyperparams, nnModel, options: Options = {}):
            super().__init__(envInfo, hyperparams, nnModel, options)
+           
+       def syncWeights(self):
+        policyWeights = self.policyNetwork.state_dict()
+        targetWeights = self.targetNetwork.state_dict()
+        for key in policyWeights:
+            targetWeights[key] = policyWeights[key]*self.tau + targetWeights[key]*(1-self.tau)
+        self.targetNetwork.load_state_dict(targetWeights)
 
        def optimize(self):
             batchSize = self.batchSize
@@ -386,15 +394,17 @@ class DoubleDQN(DQN):
                 indices = np.arange(batchSize, dtype=np.int64)
 
                 qValues = self.policyNetwork(states)
+                qNewValues =  self.policyNetwork(nextStates)
+
                 qDotValues = None
                 with torch.no_grad():
                     qDotValues = self.targetNetwork(nextStates)
                 
                 z = torch.argmax(qDotValues,dim=1)
                 normalValue = qValues[indices, actions]
-                predictedValues = qValues[indices, z]
-                targetValues = rewards + self.discountFactor * predictedValues 
-
+                predictedValues = qNewValues[indices, z]
+                targetValues = rewards + self.discountFactor * predictedValues * dones
+                # print(targetValues, dones)
                 loss = self.policyNetwork.loss(targetValues, normalValue)
                 self.policyNetwork.optimizer.zero_grad()
                 loss.backward()
