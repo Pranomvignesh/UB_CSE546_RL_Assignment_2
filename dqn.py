@@ -1,11 +1,12 @@
 import torch
 import random
 import gym
+import pickle
 import numpy as np
 from pathlib import Path
 import matplotlib
 import matplotlib.pyplot as plt
-from collections import deque, namedtuple
+from collections import deque
 from dataclasses import dataclass
 
 is_ipython = 'inline' in matplotlib.get_backend()
@@ -34,6 +35,7 @@ class Options(object):
     filePrefix : str = ''
     showLiveResults : bool = False
     logResults : bool = True
+    saveModels : bool = False
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -74,6 +76,7 @@ class DQN:
         resultsPath = self.options.resultsPath
         Path(f'{resultsPath}/images').mkdir(parents=True, exist_ok=True)
         Path(f'{resultsPath}/models').mkdir(parents=True, exist_ok=True)
+        Path(f'{resultsPath}/weights').mkdir(parents=True, exist_ok=True)
 
 
     def getAction(self, state):
@@ -121,6 +124,20 @@ class DQN:
     def syncWeights(self):
         self.targetNetwork.load_state_dict(self.policyNetwork.state_dict())
 
+    def saveWeights(self):
+        resultsPath = self.options.resultsPath
+        filePrefix = self.options.filePrefix
+        with open(f'{resultsPath}/weights/{filePrefix}_policy_weights.pkl', 'wb') as f:
+            pickle.dump(self.policyNetwork.state_dict(), f)
+        with open(f'{resultsPath}/weights/{filePrefix}_target_weights.pkl', 'wb') as f:
+            pickle.dump(self.targetNetwork.state_dict(), f)
+
+    def saveModels(self):
+        resultsPath = self.options.resultsPath
+        filePrefix = self.options.filePrefix
+        torch.save(self.policyNetwork,f'{resultsPath}/models/{filePrefix}_policy_model.pth')
+        torch.save(self.targetNetwork,f'{resultsPath}/models/{filePrefix}_target_model.pth')
+
     def plotResults(self, rewards, averageOfLast100, epsilons = None,done=False ):
         fig = plt.figure(1)
         fig.set_figwidth(12)
@@ -165,9 +182,6 @@ class DQN:
             plt.legend()
             display.clear_output(wait=True)
             display.display(plt.gcf())
-
-        # plt.pause(0.001)
-                
 
     def train(self):
         env = self.env
@@ -240,6 +254,9 @@ class DQN:
             epsilons,
             done=True
         )
+        self.saveWeights()
+        if self.options.saveModels:
+            self.saveModels()
 
 class DuelingDQN(DQN):
     def __init__(self, env, hyperparams: Hyperparams, nnModel, options: Options = {}):
