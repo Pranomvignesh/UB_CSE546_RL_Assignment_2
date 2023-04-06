@@ -73,6 +73,7 @@ class DQN:
         self.targetNetwork.load_state_dict(self.policyNetwork.state_dict())
         self.iterations = 0
         self.options = options
+        self.results = ()
         resultsPath = self.options.resultsPath
         Path(f'{resultsPath}/images').mkdir(parents=True, exist_ok=True)
         Path(f'{resultsPath}/models').mkdir(parents=True, exist_ok=True)
@@ -124,6 +125,37 @@ class DQN:
     def syncWeights(self):
         self.targetNetwork.load_state_dict(self.policyNetwork.state_dict())
 
+    def saveResults(self):
+        rewards,averageRewards, epsilons = self.results
+        fig = plt.figure(1)
+        fig.set_figwidth(12)
+        fig.set_figheight(10)
+        plt.clf()
+        filePrefix = self.options.filePrefix
+        title = 'Rewards vs Episodes'
+        if filePrefix:
+            title += ' - ' + filePrefix
+        plt.suptitle(title)
+        resultsPath = self.options.resultsPath
+        plt.title(f'Current Average Reward : {averageRewards[-1]}')
+        plt.xlabel('Episode')
+        plt.ylabel('Rewards')
+        plt.plot(rewards, '.b', label="Rewards")
+        plt.plot(averageRewards, '-r', label="Average Rewards")
+        plt.legend()
+        if resultsPath:
+            plt.savefig(f'{resultsPath}/images/{filePrefix}_EpisodesVsRewards.png')
+        plt.clf()
+        fig2 = plt.figure(1)
+        fig2.set_figwidth(12)
+        fig2.set_figheight(10)
+        plt.title('Epsilon Decay')
+        plt.xlabel('Time Steps')
+        plt.ylabel('Epsilon')
+        plt.plot(epsilons)
+        if resultsPath:
+            plt.savefig(f'{resultsPath}/images/{filePrefix}_EpsilonDecay.png')
+
     def saveWeights(self):
         resultsPath = self.options.resultsPath
         filePrefix = self.options.filePrefix
@@ -150,15 +182,12 @@ class DQN:
             if filePrefix:
                 title += ' - ' + filePrefix
             plt.suptitle(title)
-            resultsPath = self.options.resultsPath
             plt.title(f'Current Average Reward : {averageOfLast100[-1]}')
             plt.xlabel('Episode')
             plt.ylabel('Rewards')
             plt.plot(rewards, '.b', label="Rewards")
             plt.plot(averageOfLast100, '-r', label="Average Rewards")
             plt.legend()
-            if resultsPath:
-                plt.savefig(f'{resultsPath}/images/{filePrefix}_EpisodesVsRewards.png')
             plt.show()
             if epsilons:
                 fig2 = plt.figure(1)
@@ -168,8 +197,6 @@ class DQN:
                 plt.xlabel('Time Steps')
                 plt.ylabel('Epsilon')
                 plt.plot(epsilons)
-                if resultsPath:
-                    plt.savefig(f'{resultsPath}/images/{filePrefix}_EpsilonDecay.png')
                 plt.show()
         else:
             plt.clf()
@@ -254,9 +281,11 @@ class DQN:
             epsilons,
             done=True
         )
-        self.saveWeights()
-        if self.options.saveModels:
-            self.saveModels()
+        self.results = (
+            rewards,
+            averageRewards,
+            epsilons
+        )
 
 class DuelingDQN(DQN):
     def __init__(self, env, hyperparams: Hyperparams, nnModel, options: Options = {}):
