@@ -338,6 +338,7 @@ class DQN:
                 else:
                     nextState, reward, done, _ = env.step(action)
                 totalRewardPerEpisode += reward
+                state = nextState
                 self.debug(f"Reward:{reward}, {terminated=},{truncated=}")
 
                 if done:
