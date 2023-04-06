@@ -66,7 +66,7 @@ class ReplayMemory:
         return len(self.memory)
 
 class DQN:
-    def __init__(self, envInfo : EnvInfo, hyperparams : Hyperparams, nnModel, options : Options = {}):
+    def __init__(self, envInfo : EnvInfo, hyperparams : Hyperparams, nnModel, options : Options = None):
         self.env = envInfo.env
         self.observation_space = envInfo.observation_space
         self.action_space = envInfo.action_space
@@ -85,7 +85,7 @@ class DQN:
         self.targetNetwork = nnModel(self.observation_space,self.action_space,self.learningRate)
         self.targetNetwork.load_state_dict(self.policyNetwork.state_dict())
         self.iterations = 0
-        self.options = options
+        self.options = options or Options()
         self.results = ()
         resultsPath = self.options.resultsPath
         Path(f'{resultsPath}/images').mkdir(parents=True, exist_ok=True)
@@ -240,7 +240,7 @@ class DQN:
             totalRewardPerEpisode = 0
             steps = 0
             while True:
-                action = self.getAction(state, greedy)
+                action = self.getAction(state)
                 if isGymEnvLatest:
                     nextState, reward, terminated,truncated, _ = env.step(action)
                     done = terminated or truncated
@@ -300,7 +300,7 @@ class DQN:
             epsilons
         )
     
-    def loadModel(self, policyWeights, targetWeights):
+    def loadWeights(self, policyWeights, targetWeights):
         self.policyNetwork.load_state_dict(policyWeights)
         self.targetNetwork.load_state_dict(targetWeights)
     
@@ -308,7 +308,7 @@ class DQN:
         env = self.env
         observation_space = self.observation_space
         rewards = []
-        for i in range(1, timeSteps):
+        for i in range(timeSteps):
             if isGymEnvLatest:
                 state,info = env.reset()
             else:
@@ -322,6 +322,7 @@ class DQN:
                     done = terminated or truncated
                 else:
                     nextState, reward, done, _ = env.step(action)
+                print(f'Reward Per Time Step : {reward}')
                 totalRewardPerEpisode += reward
 
                 if done:
@@ -348,7 +349,7 @@ class DQN:
         plt.legend()
         if resultsPath:
             plt.savefig(f'{resultsPath}/images/{filePrefix}_Greedy_EpisodesVsRewards.png')
-        plt.clf()
+        plt.show()
         
 
 class DuelingDQN(DQN):
