@@ -126,6 +126,8 @@ class DQN:
         fig.set_figwidth(12)
         fig.set_figheight(10)
         if done:
+            plt.clf()
+            display.clear_output(wait=True)
             filePrefix = self.options.filePrefix
             title = 'Rewards vs Episodes'
             if filePrefix:
@@ -161,10 +163,10 @@ class DQN:
             plt.plot(rewards, '.b', label="Rewards")
             plt.plot(averageOfLast100, '-r', label="Average Rewards")
             plt.legend()
-            display.display(plt.gcf())
             display.clear_output(wait=True)
+            display.display(plt.gcf())
 
-        plt.pause(0.001)
+        # plt.pause(0.001)
                 
 
     def train(self):
