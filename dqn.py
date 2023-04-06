@@ -17,6 +17,19 @@ plt.ion()
 isGymEnvLatest = int(gym.__version__.split('.')[1]) >= 26
 
 @dataclass
+class EnvInfo(object):
+    env : gym.Env
+    observation_space : int = None 
+    action_space : int = None 
+
+    def __post_init__(self):
+        if self.observation_space == None:
+            self.observation_space = self.env.observation_space.shape[0]
+        if self.action_space == None:
+            self.action_space = self.env.action_space.n
+            
+
+@dataclass
 class Hyperparams(object):
     epsilon : float
     epsilonMin : float
@@ -53,23 +66,23 @@ class ReplayMemory:
         return len(self.memory)
 
 class DQN:
-    def __init__(self, env, hyperparams : Hyperparams, nnModel, options : Options = {}):
-        self.env = env
+    def __init__(self, envInfo : EnvInfo, hyperparams : Hyperparams, nnModel, options : Options = {}):
+        self.env = envInfo.env
+        self.observation_space = envInfo.observation_space
+        self.action_space = envInfo.action_space
         self.epsilon = hyperparams.epsilon
         self.epsilonMax = self.epsilon
         self.epsilonMin = hyperparams.epsilonMin
         self.epsilonDecay = hyperparams.epsilonDecay
         self.discountFactor = hyperparams.discountFactor
         self.tau = hyperparams.tau
+        self.learningRate = hyperparams.learningRate
         self.updateFrequency = hyperparams.targetNetworkUpdateFrequency
         self.batchSize = hyperparams.batchSize
         self.episodes = hyperparams.episodes
-        self.action_space = env.action_space.n
-        self.learningRate = hyperparams.learningRate
-        self.observation_space = env.observation_space.shape[0]
         self.memory = ReplayMemory(hyperparams.memorySize)
-        self.policyNetwork = nnModel(self.observation_space,self.action_space, self.learningRate)
-        self.targetNetwork = nnModel(self.observation_space,self.action_space, self.learningRate)
+        self.policyNetwork = nnModel(self.observation_space,self.action_space,self.learningRate)
+        self.targetNetwork = nnModel(self.observation_space,self.action_space,self.learningRate)
         self.targetNetwork.load_state_dict(self.policyNetwork.state_dict())
         self.iterations = 0
         self.options = options
@@ -155,6 +168,8 @@ class DQN:
         plt.plot(epsilons)
         if resultsPath:
             plt.savefig(f'{resultsPath}/images/{filePrefix}_EpsilonDecay.png')
+        plt.clf()
+
 
     def saveWeights(self):
         resultsPath = self.options.resultsPath

@@ -47,7 +47,7 @@ class GridEnvironment(gym.Env):
 
         info = {}
 
-        return observation
+        return observation, info
     
     def step(self, action):
         if self.env=="Stochastic":
@@ -76,33 +76,33 @@ class GridEnvironment(gym.Env):
         reward = 0
         if np.array_equal(self.agent_pos, self.goal_pos):
           self.state[tuple(self.goal_pos)] = 1
-          reward = 4
+          reward = 10
         
         if np.array_equal(self.agent_pos, self.reward1_pos):
           self.state[tuple(self.reward1_pos)] = 1
-          reward = -2
+          reward = -1
 
 
         if np.array_equal(self.agent_pos, self.reward2_pos):
           self.state[tuple(self.reward2_pos)] = 1
-          reward = -3
+          reward = -0.5
 
 
         if np.array_equal(self.agent_pos, self.reward3_pos):
           self.state[tuple(self.reward3_pos)] = 1
-          reward = -1
+          reward = -1.5
 
 
         if np.array_equal(self.agent_pos, self.reward4_pos):
           self.state[tuple(self.reward4_pos)] = 1
-          reward = -2.5
+          reward = -2
         
         observation = self.state.flatten()
         
         self.timestep += 1
 
-        terminated = True if self.timestep >= self.max_timesteps or np.array_equal(self.agent_pos,self.goal_pos) else False
-        truncated = True if np.all((self.agent_pos >=0 ) & (self.agent_pos <= 11)) else False
+        terminated = True if np.array_equal(self.agent_pos,self.goal_pos) else False
+        truncated = True if self.timestep >= self.max_timesteps else False
         info = {}
         return observation, reward, terminated, truncated, info
         
