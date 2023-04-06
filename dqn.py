@@ -379,6 +379,39 @@ class DuelingDQN(DQN):
         for key in policyWeights:
             targetWeights[key] = policyWeights[key]*self.tau + targetWeights[key]*(1-self.tau)
         self.targetNetwork.load_state_dict(targetWeights)
+
+    def optimize(self):
+        batchSize = self.batchSize
+        if len(self.memory) > batchSize:
+            minibatch = np.array(self.memory.sample(batchSize))
+            states = minibatch[:, 0].tolist()
+            actions = minibatch[:, 1].tolist()
+            rewards = minibatch[:, 2].tolist()
+            nextStates = minibatch[:, 3].tolist()
+            dones = minibatch[:, 4].tolist()
+
+            states = torch.tensor(states, dtype=torch.float32).to(device)
+            actions = torch.tensor(actions, dtype=torch.long).to(device)
+            rewards = torch.tensor(rewards, dtype=torch.float32).to(device)
+            nextStates = torch.tensor(
+                nextStates, dtype=torch.float32).to(device)
+            dones = torch.tensor(dones, dtype=torch.bool).to(device)
+            indices = np.arange(batchSize, dtype=np.int64)
+
+            qValues = self.policyNetwork(states)
+            qDotValues = None
+            with torch.no_grad():
+                qDotValues = self.targetNetwork(nextStates)
+
+            predictedValues = qValues[indices, actions]
+            predictedQDotValues = torch.max(qDotValues, dim=1)[0]
+
+            targetValues = (1-self.learningRate)*predictedValues+(self.learningRate)*(rewards + self.discountFactor * predictedQDotValues * dones)
+
+            loss = self.policyNetwork.loss(targetValues, predictedValues)
+            self.policyNetwork.optimizer.zero_grad()
+            loss.backward()
+            self.policyNetwork.optimizer.step()
     
 class DoubleDQN(DQN):
        def __init__(self, envInfo: EnvInfo, hyperparams: Hyperparams, nnModel, options: Options = {}):
