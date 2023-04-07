@@ -108,4 +108,3 @@ class GridEnvironment(gym.Env):
         
     def render(self):
         plt.imshow(self.state)
-

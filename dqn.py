@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from collections import deque
 from dataclasses import dataclass
 
+
 is_ipython = 'inline' in matplotlib.get_backend()
 if is_ipython:
     from IPython import display
@@ -93,6 +94,7 @@ class DQN:
         Path(f'{resultsPath}/images').mkdir(parents=True, exist_ok=True)
         Path(f'{resultsPath}/models').mkdir(parents=True, exist_ok=True)
         Path(f'{resultsPath}/weights').mkdir(parents=True, exist_ok=True)
+        Path(f'{resultsPath}/rewards').mkdir(parents=True, exist_ok=True)
 
     def getAction(self, state, train = True):
         if train and random.random() < self.epsilon:
@@ -179,10 +181,16 @@ class DQN:
     def saveWeights(self):
         resultsPath = self.options.resultsPath
         filePrefix = self.options.filePrefix
-        with open(f'{resultsPath}/weights/{filePrefix}_{self.name}_policy_weights.pkl', 'wb') as f:
+        with open(f'{resultsPath}/weights/prakash8_mnunna_assignment2_{filePrefix}_{self.name}_policy_weights.pkl', 'wb') as f:
             pickle.dump(self.policyNetwork.state_dict(), f)
-        with open(f'{resultsPath}/weights/{filePrefix}_{self.name}_target_weights.pkl', 'wb') as f:
+        with open(f'{resultsPath}/weights/prakash8_mnunna_assignment2_{filePrefix}_{self.name}_target_weights.pkl', 'wb') as f:
             pickle.dump(self.targetNetwork.state_dict(), f)
+
+    def saveRewards(self, valueToSave):
+        resultsPath = self.options.resultsPath
+        filePrefix = self.options.filePrefix
+        with open(f'{resultsPath}/rewards/{filePrefix}_{self.name}_rewards.pkl', 'wb') as f:
+            pickle.dump(valueToSave, f)
 
     def saveModels(self):
         resultsPath = self.options.resultsPath
@@ -311,6 +319,7 @@ class DQN:
             epsilons,
             done=True
         )
+        self.saveRewards((rewards, averageRewards))
         self.results = (
             rewards,
             averageRewards,
