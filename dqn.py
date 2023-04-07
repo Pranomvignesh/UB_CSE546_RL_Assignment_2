@@ -157,8 +157,6 @@ class DQN:
         plt.title(f'Current Average Reward : {averageRewards[-1]}')
         plt.xlabel('Episode')
         plt.ylabel('Rewards')
-        plt.xticks(fontsize=16)
-        plt.yticks(fontsize=16)
         plt.plot(rewards, '.b', label="Rewards")
         plt.plot(averageRewards, '-r', label="Average Rewards")
         plt.legend()
@@ -171,8 +169,8 @@ class DQN:
         plt.title(f'Epsilon Decay - {filePrefix} {self.name}')
         plt.xlabel('Time Steps')
         plt.ylabel('Epsilon')
-        plt.xticks(fontsize=16)
-        plt.yticks(fontsize=16)
+        
+        
         plt.plot(epsilons)
         if resultsPath:
             plt.savefig(f'{resultsPath}/images/{filePrefix}_{self.name}_EpsilonDecay.png')
@@ -212,8 +210,6 @@ class DQN:
             plt.title(f'Current Average Reward : {averageOfLast100[-1]}')
             plt.xlabel('Episode')
             plt.ylabel('Rewards')
-            plt.xticks(fontsize=16)
-            plt.yticks(fontsize=16)
             plt.plot(rewards, '.b', label="Rewards")
             plt.plot(averageOfLast100, '-r', label="Average Rewards")
             plt.legend()
@@ -225,8 +221,6 @@ class DQN:
                 plt.title(f'Epsilon Decay - {filePrefix} {self.name}')
                 plt.xlabel('Time Steps')
                 plt.ylabel('Epsilon')
-                plt.xticks(fontsize=16)
-                plt.yticks(fontsize=16)
                 plt.plot(epsilons)
                 plt.show()
         else:
@@ -235,8 +229,6 @@ class DQN:
             plt.title(f'Current Average Reward : {averageOfLast100[-1]}')
             plt.xlabel('Episode')
             plt.ylabel('Rewards')
-            plt.xticks(fontsize=16)
-            plt.yticks(fontsize=16)
             plt.plot(rewards, '.b', label="Rewards")
             plt.plot(averageOfLast100, '-r', label="Average Rewards")
             plt.legend()
