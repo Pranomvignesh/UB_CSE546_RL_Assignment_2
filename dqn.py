@@ -49,7 +49,6 @@ class Options(object):
     showLiveResults : bool = False
     logResults : bool = True
     saveModels : bool = False
-    debug : bool = False
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -68,7 +67,6 @@ class ReplayMemory:
 
 class DQN:
     def __init__(self, envInfo : EnvInfo, hyperparams : Hyperparams, nnModel, options : Options = None):
-        self.name = type(self).__name__
         self.env = envInfo.env
         self.observation_space = envInfo.observation_space
         self.action_space = envInfo.action_space
@@ -97,13 +95,11 @@ class DQN:
     def getAction(self, state, train = True):
         if train and random.random() < self.epsilon:
             return self.env.action_space.sample()
-        else:
-            with torch.no_grad():
-                state = torch.tensor(state).float().detach()
-                state = state.to(device)
-                state = state.unsqueeze(0)
-                qValues = self.policyNetwork(state)
-                return torch.argmax(qValues).item()
+        state = torch.tensor(state).float().detach()
+        state = state.to(device)
+        state = state.unsqueeze(0)
+        qValues = self.policyNetwork(state[0])
+        return torch.argmax(qValues).item()
 
     def optimize(self):
         batchSize = self.batchSize
@@ -151,7 +147,6 @@ class DQN:
         title = 'Rewards vs Episodes'
         if filePrefix:
             title += ' - ' + filePrefix
-        title += ' - ' + self.name
         plt.suptitle(title)
         resultsPath = self.options.resultsPath
         plt.title(f'Current Average Reward : {averageRewards[-1]}')
@@ -161,38 +156,32 @@ class DQN:
         plt.plot(averageRewards, '-r', label="Average Rewards")
         plt.legend()
         if resultsPath:
-            plt.savefig(f'{resultsPath}/images/{filePrefix}_{self.name}_EpisodesVsRewards.png')
+            plt.savefig(f'{resultsPath}/images/{filePrefix}_EpisodesVsRewards.png')
         plt.clf()
         fig2 = plt.figure(1)
         fig2.set_figwidth(12)
         fig2.set_figheight(10)
-        plt.title(f'Epsilon Decay - {filePrefix} {self.name}')
+        plt.title('Epsilon Decay')
         plt.xlabel('Time Steps')
         plt.ylabel('Epsilon')
-        
-        
         plt.plot(epsilons)
         if resultsPath:
-            plt.savefig(f'{resultsPath}/images/{filePrefix}_{self.name}_EpsilonDecay.png')
+            plt.savefig(f'{resultsPath}/images/{filePrefix}_EpsilonDecay.png')
         plt.clf()
 
     def saveWeights(self):
         resultsPath = self.options.resultsPath
         filePrefix = self.options.filePrefix
-        with open(f'{resultsPath}/weights/{filePrefix}_{self.name}_policy_weights.pkl', 'wb') as f:
+        with open(f'{resultsPath}/weights/{filePrefix}_policy_weights.pkl', 'wb') as f:
             pickle.dump(self.policyNetwork.state_dict(), f)
-        with open(f'{resultsPath}/weights/{filePrefix}_{self.name}_target_weights.pkl', 'wb') as f:
+        with open(f'{resultsPath}/weights/{filePrefix}_target_weights.pkl', 'wb') as f:
             pickle.dump(self.targetNetwork.state_dict(), f)
 
     def saveModels(self):
         resultsPath = self.options.resultsPath
         filePrefix = self.options.filePrefix
-        torch.save(self.policyNetwork,f'{resultsPath}/models/{filePrefix}_{self.name}_policy_model.pth')
-        torch.save(self.targetNetwork,f'{resultsPath}/models/{filePrefix}_{self.name}_target_model.pth')
-
-    def loadModels(self, policyModel, targetModel):
-        self.policyNetwork = policyModel
-        self.targetNetwork = targetModel
+        torch.save(self.policyNetwork,f'{resultsPath}/models/{filePrefix}_policy_model.pth')
+        torch.save(self.targetNetwork,f'{resultsPath}/models/{filePrefix}_target_model.pth')
 
     def plotResults(self, rewards, averageOfLast100, epsilons = None,done=False ):
         fig = plt.figure(1)
@@ -204,8 +193,7 @@ class DQN:
             filePrefix = self.options.filePrefix
             title = 'Rewards vs Episodes'
             if filePrefix:
-                title += ' - ' + filePrefix 
-            title += ' - ' + self.name
+                title += ' - ' + filePrefix
             plt.suptitle(title)
             plt.title(f'Current Average Reward : {averageOfLast100[-1]}')
             plt.xlabel('Episode')
@@ -218,7 +206,7 @@ class DQN:
                 fig2 = plt.figure(1)
                 fig2.set_figwidth(12)
                 fig2.set_figheight(10)
-                plt.title(f'Epsilon Decay - {filePrefix} {self.name}')
+                plt.title('Epsilon Decay')
                 plt.xlabel('Time Steps')
                 plt.ylabel('Epsilon')
                 plt.plot(epsilons)
@@ -235,13 +223,9 @@ class DQN:
             display.clear_output(wait=True)
             display.display(plt.gcf())
 
-    def debug(self,log):
-        if self.options.debug:
-            print(log)
-
     def train(self):
         env = self.env
-        observation_space = self.observation_space
+        observation_space = (self.observation_space)
         bestReward = 0
         bestAverageReward = 0
         rewards = []
@@ -255,7 +239,6 @@ class DQN:
             state = np.reshape(state, [1, observation_space])
             totalRewardPerEpisode = 0
             steps = 0
-            epsilons.append(self.epsilon)
             while True:
                 action = self.getAction(state)
                 if isGymEnvLatest:
@@ -274,7 +257,7 @@ class DQN:
                     np.exp((-1 * self.iterations) / self.epsilonDecay)
                 self.iterations += 1
                 self.epsilon = max(self.epsilonMin, decayed_epsilon)
-                # epsilons.append(self.epsilon)
+                epsilons.append(self.epsilon)
 
                 steps += 1
                 if steps % self.updateFrequency:
@@ -304,7 +287,7 @@ class DQN:
                             \nEpsilon {self.epsilon}\n"
                         )
                     break
-            
+        
         self.plotResults(
             rewards, 
             averageRewards, 
@@ -321,7 +304,7 @@ class DQN:
         self.policyNetwork.load_state_dict(policyWeights)
         self.targetNetwork.load_state_dict(targetWeights)
     
-    def greedy(self, timeSteps, ylim = None):
+    def greedy(self, timeSteps):
         env = self.env
         observation_space = self.observation_space
         rewards = []
@@ -339,9 +322,8 @@ class DQN:
                     done = terminated or truncated
                 else:
                     nextState, reward, done, _ = env.step(action)
+                print(f'Reward Per Time Step : {reward}')
                 totalRewardPerEpisode += reward
-                state = nextState
-                self.debug(f"Reward:{reward}, {terminated=},{truncated=}")
 
                 if done:
                     rewards.append(totalRewardPerEpisode)
@@ -363,19 +345,16 @@ class DQN:
         resultsPath = self.options.resultsPath
         plt.xlabel('Episode')
         plt.ylabel('Rewards')
-        if ylim:
-            plt.ylim(ylim)
         plt.plot(rewards, '-r', label="Rewards")
         plt.legend()
         if resultsPath:
-            plt.savefig(f'{resultsPath}/images/{filePrefix}_{self.name}_Greedy_EpisodesVsRewards.png')
+            plt.savefig(f'{resultsPath}/images/{filePrefix}_Greedy_EpisodesVsRewards.png')
         plt.show()
         
 
 class DuelingDQN(DQN):
-    def __init__(self, env, hyperparams: Hyperparams, nnModel, options: Options = {}):
-        super().__init__(env, hyperparams, nnModel, options)
-        self.name = type(self).__name__
+    def __init__(self, envInfo, hyperparams: Hyperparams, nnModel, options: Options = {}):
+        super().__init__(envInfo, hyperparams, nnModel, options)
     
     def syncWeights(self):
         policyWeights = self.policyNetwork.state_dict()
@@ -383,85 +362,41 @@ class DuelingDQN(DQN):
         for key in policyWeights:
             targetWeights[key] = policyWeights[key]*self.tau + targetWeights[key]*(1-self.tau)
         self.targetNetwork.load_state_dict(targetWeights)
-
-    def optimize(self):
-        batchSize = self.batchSize
-        if len(self.memory) > batchSize:
-            minibatch = np.array(self.memory.sample(batchSize))
-            states = minibatch[:, 0].tolist()
-            actions = minibatch[:, 1].tolist()
-            rewards = minibatch[:, 2].tolist()
-            nextStates = minibatch[:, 3].tolist()
-            dones = minibatch[:, 4].tolist()
-
-            states = torch.tensor(states, dtype=torch.float32).to(device)
-            actions = torch.tensor(actions, dtype=torch.long).to(device)
-            rewards = torch.tensor(rewards, dtype=torch.float32).to(device)
-            nextStates = torch.tensor(
-                nextStates, dtype=torch.float32).to(device)
-            dones = torch.tensor(dones, dtype=torch.bool).to(device)
-            indices = np.arange(batchSize, dtype=np.int64)
-
-            qValues = self.policyNetwork(states)
-            qDotValues = None
-            with torch.no_grad():
-                qDotValues = self.targetNetwork(nextStates)
-
-            predictedValues = qValues[indices, actions]
-            predictedQDotValues = torch.max(qDotValues, dim=1)[0]
-
-            targetValues = (1-self.learningRate)*predictedValues+(self.learningRate)*(rewards + self.discountFactor * predictedQDotValues * dones)
-
-            loss = self.policyNetwork.loss(targetValues, predictedValues)
-            self.policyNetwork.optimizer.zero_grad()
-            loss.backward()
-            self.policyNetwork.optimizer.step()
     
 class DoubleDQN(DQN):
-    def __init__(self, envInfo: EnvInfo, hyperparams: Hyperparams, nnModel, options: Options = {}):
-        super().__init__(envInfo, hyperparams, nnModel, options)
-        self.name = type(self).__name__
+       def __init__(self, envInfo: EnvInfo, hyperparams: Hyperparams, nnModel, options: Options = {}):
+           super().__init__(envInfo, hyperparams, nnModel, options)
 
-           
-    def syncWeights(self):
-        policyWeights = self.policyNetwork.state_dict()
-        targetWeights = self.targetNetwork.state_dict()
-        for key in policyWeights:
-            targetWeights[key] = policyWeights[key]*self.tau + targetWeights[key]*(1-self.tau)
-        self.targetNetwork.load_state_dict(targetWeights)
+       def optimize(self):
+            batchSize = self.batchSize
+            if len(self.memory) > batchSize:
+                minibatch = np.array(self.memory.sample(batchSize))
+                states = minibatch[:, 0].tolist()
+                actions = minibatch[:, 1].tolist()
+                rewards = minibatch[:, 2].tolist()
+                nextStates = minibatch[:, 3].tolist()
+                dones = minibatch[:, 4].tolist()
 
-    def optimize(self):
-        batchSize = self.batchSize
-        if len(self.memory) > batchSize:
-            minibatch = np.array(self.memory.sample(batchSize))
-            states = minibatch[:, 0].tolist()
-            actions = minibatch[:, 1].tolist()
-            rewards = minibatch[:, 2].tolist()
-            nextStates = minibatch[:, 3].tolist()
-            dones = minibatch[:, 4].tolist()
+                states = torch.tensor(states, dtype=torch.float32).to(device)
+                actions = torch.tensor(actions, dtype=torch.long).to(device)
+                rewards = torch.tensor(rewards, dtype=torch.float32).to(device)
+                nextStates = torch.tensor(
+                    nextStates, dtype=torch.float32).to(device)
+                dones = torch.tensor(dones, dtype=torch.bool).to(device)
+                indices = np.arange(batchSize, dtype=np.int64)
 
-            states = torch.tensor(states, dtype=torch.float32).to(device)
-            actions = torch.tensor(actions, dtype=torch.long).to(device)
-            rewards = torch.tensor(rewards, dtype=torch.float32).to(device)
-            nextStates = torch.tensor(
-                nextStates, dtype=torch.float32).to(device)
-            dones = torch.tensor(dones, dtype=torch.bool).to(device)
-            indices = np.arange(batchSize, dtype=np.int64)
+                qValues = self.policyNetwork(states)
+                qDotValues = None
+                with torch.no_grad():
+                    qDotValues = self.targetNetwork(nextStates)
+                
+                z = torch.argmax(qDotValues,dim=1)
+                normalValue = qValues[indices, actions]
+                predictedValues = qValues[indices, z]
+                targetValues = rewards + self.discountFactor * predictedValues 
 
-            qValues = self.policyNetwork(states)
-
-            qDotValues = None
-            qNewValues = None
-            with torch.no_grad():
-                qNewValues =  self.policyNetwork(nextStates)
-                qDotValues = self.targetNetwork(nextStates)
-            
-            maxActions = torch.argmax(qDotValues,dim=1)
-            normalValue = qValues[indices, actions]
-            predictedValues = qNewValues[indices, maxActions]
-            targetValues = rewards + self.discountFactor * predictedValues * dones
-            loss = self.policyNetwork.loss(targetValues, normalValue)
-            self.policyNetwork.optimizer.zero_grad()
-            loss.backward()
-            self.policyNetwork.optimizer.step()
-            
+                loss = self.policyNetwork.loss(targetValues, normalValue)
+                self.policyNetwork.optimizer.zero_grad()
+                loss.backward()
+                self.policyNetwork.optimizer.step()
+                
