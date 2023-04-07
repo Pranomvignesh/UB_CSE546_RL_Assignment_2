@@ -391,31 +391,85 @@ class DuelingDQN(DQN):
         for key in policyWeights:
             targetWeights[key] = policyWeights[key]*self.tau + targetWeights[key]*(1-self.tau)
         self.targetNetwork.load_state_dict(targetWeights)
+
+    def optimize(self):
+        batchSize = self.batchSize
+        if len(self.memory) > batchSize:
+            minibatch = np.array(self.memory.sample(batchSize))
+            states = minibatch[:, 0].tolist()
+            actions = minibatch[:, 1].tolist()
+            rewards = minibatch[:, 2].tolist()
+            nextStates = minibatch[:, 3].tolist()
+            dones = minibatch[:, 4].tolist()
+
+            states = torch.tensor(states, dtype=torch.float32).to(device)
+            actions = torch.tensor(actions, dtype=torch.long).to(device)
+            rewards = torch.tensor(rewards, dtype=torch.float32).to(device)
+            nextStates = torch.tensor(
+                nextStates, dtype=torch.float32).to(device)
+            dones = torch.tensor(dones, dtype=torch.bool).to(device)
+            indices = np.arange(batchSize, dtype=np.int64)
+
+            qValues = self.policyNetwork(states)
+            qDotValues = None
+            with torch.no_grad():
+                qDotValues = self.targetNetwork(nextStates)
+
+            predictedValues = qValues[indices, actions]
+            predictedQDotValues = torch.max(qDotValues, dim=1)[0]
+
+            targetValues = (1-self.learningRate)*predictedValues+(self.learningRate)*(rewards + self.discountFactor * predictedQDotValues * dones)
+
+            loss = self.policyNetwork.loss(targetValues, predictedValues)
+            self.policyNetwork.optimizer.zero_grad()
+            loss.backward()
+            self.policyNetwork.optimizer.step()
     
 class DoubleDQN(DQN):
-       def __init__(self, envInfo: EnvInfo, hyperparams: Hyperparams, nnModel, options: Options = {}):
-            super().__init__(envInfo, hyperparams, nnModel, options)
-            self.name = type(self).__name__
+    def __init__(self, envInfo: EnvInfo, hyperparams: Hyperparams, nnModel, options: Options = {}):
+        super().__init__(envInfo, hyperparams, nnModel, options)
+        self.name = type(self).__name__
 
-       def optimize(self):
-            batchSize = self.batchSize
-            if len(self.memory) > batchSize:
-                minibatch = np.array(self.memory.sample(batchSize))
+           
+    def syncWeights(self):
+        policyWeights = self.policyNetwork.state_dict()
+        targetWeights = self.targetNetwork.state_dict()
+        for key in policyWeights:
+            targetWeights[key] = policyWeights[key]*self.tau + targetWeights[key]*(1-self.tau)
+        self.targetNetwork.load_state_dict(targetWeights)
 
-                states = torch.FloatTensor([transition[0] for transition in minibatch]).to(device)
-                actions = torch.LongTensor([transition[1] for transition in minibatch]).to(device)
-                rewards = torch.FloatTensor([transition[2] for transition in minibatch]).to(device)
-                nextStates = torch.FloatTensor([transition[3] for transition in minibatch]).to(device)
+    def optimize(self):
+        batchSize = self.batchSize
+        if len(self.memory) > batchSize:
+            minibatch = np.array(self.memory.sample(batchSize))
+            states = minibatch[:, 0].tolist()
+            actions = minibatch[:, 1].tolist()
+            rewards = minibatch[:, 2].tolist()
+            nextStates = minibatch[:, 3].tolist()
+            dones = minibatch[:, 4].tolist()
 
-                with torch.no_grad():
-                    maxActions = self.policyNetwork(nextStates).argmax(dim=1)
-                    qDotValues = self.targetNetwork(nextStates)
-                    qDotValues = qDotValues.gather(1, maxActions.unsqueeze(1)).squeeze(1)
-                    targetValues = rewards + self.discountFactor * qDotValues
-                qValues = self.policyNetwork(states)
-                predictedValues = qValues.gather(1, actions.unsqueeze(1)).squeeze(1)
-                
-                self.policyNetwork.optimizer.zero_grad()
-                loss = self.policyNetwork.loss(targetValues, predictedValues)
-                loss.backward()
-                self.policyNetwork.optimizer.step()
+            states = torch.tensor(states, dtype=torch.float32).to(device)
+            actions = torch.tensor(actions, dtype=torch.long).to(device)
+            rewards = torch.tensor(rewards, dtype=torch.float32).to(device)
+            nextStates = torch.tensor(
+                nextStates, dtype=torch.float32).to(device)
+            dones = torch.tensor(dones, dtype=torch.bool).to(device)
+            indices = np.arange(batchSize, dtype=np.int64)
+
+            qValues = self.policyNetwork(states)
+
+            qDotValues = None
+            qNewValues = None
+            with torch.no_grad():
+                qNewValues =  self.policyNetwork(nextStates)
+                qDotValues = self.targetNetwork(nextStates)
+            
+            maxActions = torch.argmax(qDotValues,dim=1)
+            normalValue = qValues[indices, actions]
+            predictedValues = qNewValues[indices, maxActions]
+            targetValues = rewards + self.discountFactor * predictedValues * dones
+            loss = self.policyNetwork.loss(targetValues, normalValue)
+            self.policyNetwork.optimizer.zero_grad()
+            loss.backward()
+            self.policyNetwork.optimizer.step()
+            
